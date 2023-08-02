@@ -65,28 +65,32 @@ def return_item():
     # Format the list of borrowed items
     print("List of Borrowed Items:")
     for borrowing_id, title, borrowing_date, due_date in borrowed_items:
-        print(f"ID: {borrowing_id}, Title: {title}, Borrowed Date: {borrowing_date}, Due Date: {due_date}")
+        print(f"Borrowing ID: {borrowing_id}, Title: {title}, Borrowed Date: {borrowing_date}, Due Date: {due_date}")
 
-    book_title = input("Enter the title of the book you want to return: ")
+    borrowing_id = int(input("Enter the borrowing ID of the book you want to return (or press 0 to exit): "))
 
-    # Check if the provided book title is in the list of borrowed items
-    selected_item = next((item for item in borrowed_items if item[1] == book_title), None)
-    if selected_item is None:
-        return "Invalid book title. Please enter a title from the list of borrowed items."
+    if borrowing_id == 0:
+        return "You have exited."
 
-    borrowing_id, _, _, _ = selected_item
+    cursor.execute("SELECT itemID, returnDate, dueDate FROM Borrowing WHERE borrowingID = ?", (borrowing_id,))
+    result = cursor.fetchone()
+    if result is None:
+        return "Invalid borrowing ID."
 
+    item_id, return_date, due_date_str = result
+    if return_date is not None:
+        return "Item has already been returned."
+
+    due_date = datetime.datetime.strptime(due_date_str, "%Y-%m-%d").date()
     return_date = datetime.date.today()
     cursor.execute("UPDATE Borrowing SET returnDate = ? WHERE borrowingID = ?", (return_date, borrowing_id))
 
-    cursor.execute("SELECT dueDate FROM Borrowing WHERE borrowingID = ?", (borrowing_id,))
-    due_date = cursor.fetchone()[0]
     if return_date > due_date:
         fine_days = (return_date - due_date).days
         fine = fine_days * 0.50  # Assuming a fine of $0.50 per day late
         cursor.execute("UPDATE Borrowing SET fines = ? WHERE borrowingID = ?", (fine, borrowing_id))
 
-    cursor.execute("UPDATE Item SET availabilityStatus = ? WHERE itemID = ?", ('Y', selected_item[0]))
+    cursor.execute("UPDATE Item SET availabilityStatus = ? WHERE itemID = ?", ('Y', item_id))
     conn.commit()
     return "Item successfully returned."
 
@@ -102,7 +106,6 @@ def donate_item():
     print("Select the item genre from the following options or enter 'create new' to add a new genre:")
     for index, genre in enumerate(genres, start=1):
         print(f"{index}. {genre}")
-    print(f"{len(genres)+1}. Create New")
     genre_choice = input("Enter the number corresponding to the item genre or 'create new': ")
     if genre_choice.lower() == 'create new':
         new_genre = input("Enter the new genre: ")
@@ -253,7 +256,6 @@ while True:
     elif choice == 2:
         print(borrow_item())
     elif choice == 3:
-        borrowing_id = int(input("Enter the borrowing ID: \n"))
         print(return_item())
     elif choice == 4:
         print(donate_item())
