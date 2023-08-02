@@ -79,46 +79,69 @@ def find_event_by_name(event_name):
 
 def register_for_event():
     # Function to register for an event in the library
-    user_id = int(input("Enter your user ID: "))
-    event_id = int(input("Enter the event ID you want to register for: "))
+    try:
+        user_id = int(input("Enter your user ID: "))
+        event_name = input("Enter the event name you want to register for: ")
 
-    cursor.execute("SELECT * FROM Event WHERE eventID = ?", (event_id,))
-    event = cursor.fetchone()
-    if event is None:
-        return "Invalid event ID."
+        cursor.execute("SELECT * FROM Event WHERE eventName = ?", (event_name,))
+        event = cursor.fetchone()
+        if event is None:
+            return "Invalid event name. Please check the event name and try again."
 
-    cursor.execute("INSERT INTO Invited (userID, eventID) VALUES (?, ?)", (user_id, event_id))
-    conn.commit()
-    return "Successfully registered for the event."
+        event_id = event[0]  # Assuming the eventID is in the first column of the Event table.
+
+        cursor.execute("INSERT INTO Invited (userID, eventID) VALUES (?, ?)", (user_id, event_id))
+        conn.commit()
+        return "Successfully registered for the event."
+    except ValueError:
+        return "Invalid input. Please enter a valid user ID."
 
 def volunteer():
-    # Function to volunteer for the library
-    user_id = int(input("Enter your user ID: "))
-    task = input("Enter the task you want to volunteer for: ")
+    try:
+        # Function to volunteer for the library
+        user_id = int(input("Enter your user ID: "))
 
-    cursor.execute("SELECT * FROM User WHERE userID = ?", (user_id,))
-    user = cursor.fetchone()
-    if user is None:
-        return "Invalid user ID."
+        # Fetch user details from the User table using userID
+        cursor.execute("SELECT * FROM User WHERE userID = ?", (user_id,))
+        user = cursor.fetchone()
+        if user is None:
+            return "Invalid user ID."
 
-    cursor.execute("INSERT INTO Personnel (personnelID, jobTitle) VALUES (?, ?)", (user_id, task))
-    conn.commit()
-    return "Successfully volunteered for the library."
+        # Extract user details
+        user_first_name = user[1]  # Assuming firstName is in the second column (index 1)
+        user_last_name = user[2]   # Assuming lastName is in the third column (index 2)
+        user_contact_details = user[3]  # Assuming contactDetails is in the fourth column (index 3)
+
+        task = input("Enter the job you want to volunteer for: ")
+
+        # Insert user details into the Personnel table
+        cursor.execute("INSERT INTO Personnel (personnelID, firstName, lastName, jobTitle, contactDetails) VALUES (?, ?, ?, ?, ?)",
+                       (user_id, user_first_name, user_last_name, task, user_contact_details))
+        conn.commit()
+
+        return "Successfully volunteered for the library. You are now library personnel."
+    except ValueError:
+        return "Invalid input. Please enter a valid user ID (integer)."
+    except Exception as e:
+        return f"An error occurred: {e}"
+
 
 def ask_for_help():
-    # Function to ask for help from a librarian
-    user_id = int(input("Enter your user ID: "))
-    message = input("Enter your message for the librarian: ")
+    try:
+        # Function to ask for help from a librarian
+        user_id = int(input("Enter your user ID: "))
+        message = input("Enter your message for the librarian: ")
 
-    cursor.execute("SELECT * FROM User WHERE userID = ?", (user_id,))
-    user = cursor.fetchone()
-    if user is None:
-        return "Invalid user ID."
+        cursor.execute("SELECT * FROM User WHERE userID = ?", (user_id,))
+        user = cursor.fetchone()
+        if user is None:
+            return "Invalid user ID."
 
-    cursor.execute("INSERT INTO Personnel (personnelID, jobTitle, contactDetails) VALUES (?, ?, ?)",
-                   (user_id, 'Librarian', message))
-    conn.commit()
-    return "Help request sent to the librarian."
+        return "Help request sent to the librarian."
+    except ValueError:
+        return "Invalid input. Please enter a valid user ID (integer)."
+    except Exception as e:
+        return f"An error occurred: {e}"
 
 def print_menu():
     print("\nWelcome To our Library Database! \n")
