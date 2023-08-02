@@ -7,6 +7,14 @@ import datetime
 conn = sqlite3.connect('library.db')
 cursor = conn.cursor()
 
+def show_available_items():
+    # Function to show all available items in the database
+    cursor.execute("SELECT * FROM Item WHERE availabilityStatus = 'Y'")
+    available_items = cursor.fetchall()
+    # Format the result with each tuple on a new line
+    formatted_items = "\n".join(str(item) for item in available_items)
+    return formatted_items
+
 def find_item_by_title(title):
     # Function to find an item in the library based on the title
     cursor.execute("SELECT * FROM Item WHERE title LIKE ?", ('%' + title + '%',))
@@ -16,34 +24,57 @@ def find_item_by_title(title):
 def borrow_item():
     # Function to borrow an item from the library
     user_id = int(input("Enter your user ID: "))
-    item_id = int(input("Enter the item ID you want to borrow: "))
-    due_date = input("Enter the due date (YYYY-MM-DD): ")
+    item_title = input("Enter the title of the item you want to borrow: ")
 
-    cursor.execute("SELECT availabilityStatus FROM Item WHERE itemID = ?", (item_id,))
-    availability = cursor.fetchone()
-    if availability[0] != 'Available':
+    # Check if the item is available in the library
+    items = find_item_by_title(item_title)
+    if not items:
+        return "Item not found in the library."
+
+    available_items = [item for item in items if item[5] == 'Y']
+    if not available_items:
         return "Item is not available for borrowing."
 
+    # Assume the user wants to borrow the first available item found with the given title
+    item_id = available_items[0][0]
+
     borrowing_date = datetime.date.today()
+    due_date = borrowing_date + datetime.timedelta(days=10)
+    print("The due date is", due_date)
+
+    # Borrow the item
     cursor.execute("INSERT INTO Borrowing (userID, itemID, borrowingDate, dueDate) VALUES (?, ?, ?, ?)",
                    (user_id, item_id, borrowing_date, due_date))
 
-    cursor.execute("UPDATE Item SET availabilityStatus = ? WHERE itemID = ?", ('Borrowed', item_id))
+    cursor.execute("UPDATE Item SET availabilityStatus = ? WHERE itemID = ?", ('N', item_id))
     conn.commit()
+
     return "Item successfully borrowed."
 
 def return_item():
     # Function to return a borrowed item
-    borrowing_id = int(input("Enter the borrowing ID: "))
+    user_id = int(input("Enter your user ID: "))
 
-    cursor.execute("SELECT itemID, returnDate FROM Borrowing WHERE borrowingID = ?", (borrowing_id,))
-    result = cursor.fetchone()
-    if result is None:
-        return "Invalid borrowing ID."
+    cursor.execute("SELECT borrowingID, Item.title, borrowingDate, dueDate FROM Borrowing "
+                   "JOIN Item ON Borrowing.itemID = Item.itemID WHERE userID = ? AND returnDate IS NULL", (user_id,))
+    borrowed_items = cursor.fetchall()
 
-    item_id, return_date = result
-    if return_date is not None:
-        return "Item has already been returned."
+    if not borrowed_items:
+        return "You have no borrowed items."
+
+    # Format the list of borrowed items
+    print("List of Borrowed Items:")
+    for borrowing_id, title, borrowing_date, due_date in borrowed_items:
+        print(f"ID: {borrowing_id}, Title: {title}, Borrowed Date: {borrowing_date}, Due Date: {due_date}")
+
+    book_title = input("Enter the title of the book you want to return: ")
+
+    # Check if the provided book title is in the list of borrowed items
+    selected_item = next((item for item in borrowed_items if item[1] == book_title), None)
+    if selected_item is None:
+        return "Invalid book title. Please enter a title from the list of borrowed items."
+
+    borrowing_id, _, _, _ = selected_item
 
     return_date = datetime.date.today()
     cursor.execute("UPDATE Borrowing SET returnDate = ? WHERE borrowingID = ?", (return_date, borrowing_id))
@@ -55,7 +86,7 @@ def return_item():
         fine = fine_days * 0.50  # Assuming a fine of $0.50 per day late
         cursor.execute("UPDATE Borrowing SET fines = ? WHERE borrowingID = ?", (fine, borrowing_id))
 
-    cursor.execute("UPDATE Item SET availabilityStatus = ? WHERE itemID = ?", ('Available', item_id))
+    cursor.execute("UPDATE Item SET availabilityStatus = ? WHERE itemID = ?", ('Y', selected_item[0]))
     conn.commit()
     return "Item successfully returned."
 
@@ -63,11 +94,59 @@ def donate_item():
     # Function to donate an item to the library
     title = input("Enter the item title: ")
     author = input("Enter the item author: ")
-    genre = input("Enter the item genre: ")
-    format = input("Enter the item format: ")
+
+    # List of Genres
+    genres = ['Classic', 'Mystery', 'Fantasy', 'Dystopian', 'Coming-of-age', 'Science Fiction', 'Pop', 'Magazine']
+
+    # Prompt user to select genre from the list or create a new one
+    print("Select the item genre from the following options or enter 'create new' to add a new genre:")
+    for index, genre in enumerate(genres, start=1):
+        print(f"{index}. {genre}")
+    print(f"{len(genres)+1}. Create New")
+    genre_choice = input("Enter the number corresponding to the item genre or 'create new': ")
+    if genre_choice.lower() == 'create new':
+        new_genre = input("Enter the new genre: ")
+        print(f"Are you sure you want to add '{new_genre}' to the list of genres?")
+        verify_choice = input("Enter 'yes' to confirm or any other key to cancel: ")
+        if verify_choice.lower() == 'yes':
+            genres.append(new_genre)
+            genre = new_genre
+        else:
+            return "Genre addition canceled."
+    else:
+        genre_choice = int(genre_choice)
+        if 1 <= genre_choice <= len(genres):
+            genre = genres[genre_choice - 1]
+        else:
+            return "Invalid genre choice."
+
+    # List of Formats
+    formats = ['Print Book', 'DVD', 'CD', 'Print Magazine']
+
+    # Prompt user to select format from the list or create a new one
+    print("Select the item format from the following options or enter 'create new' to add a new format:")
+    for index, item_format in enumerate(formats, start=1):
+        print(f"{index}. {item_format}")
+    print(f"{len(formats)+1}. Create New")
+    format_choice = input("Enter the number corresponding to the item format or 'create new': ")
+    if format_choice.lower() == 'create new':
+        new_format = input("Enter the new format: ")
+        print(f"Are you sure you want to add '{new_format}' to the list of formats?")
+        verify_choice = input("Enter 'yes' to confirm or any other key to cancel: ")
+        if verify_choice.lower() == 'yes':
+            formats.append(new_format)
+            format = new_format
+        else:
+            return "Format addition canceled."
+    else:
+        format_choice = int(format_choice)
+        if 1 <= format_choice <= len(formats):
+            format = formats[format_choice - 1]
+        else:
+            return "Invalid format choice."
 
     cursor.execute("INSERT INTO Item (title, author, genre, format, availabilityStatus) VALUES (?, ?, ?, ?, ?)",
-                   (title, author, genre, format, 'Available'))
+                   (title, author, genre, format, 'Y'))
     conn.commit()
     return "Item successfully donated."
 
@@ -125,7 +204,6 @@ def volunteer():
     except Exception as e:
         return f"An error occurred: {e}"
 
-
 def ask_for_help():
     try:
         # Function to ask for help from a librarian
@@ -146,6 +224,7 @@ def ask_for_help():
 def print_menu():
     print("\nWelcome To our Library Database! \n")
     print("Please select an option from the following menu: \n")
+    print("0. Display all avalible items in the library")
     print("1. Find an item in the library")
     print("2. Borrow an item from the library")
     print("3. Return a borrowed item")
@@ -160,7 +239,9 @@ while True:
     print_menu()
     choice = int(input("Enter your choice: \n"))
 
-    if choice == 1:
+    if choice == 0:
+        print(show_available_items())
+    elif choice == 1:
         title = input("Enter the item title: \n")
         items = find_item_by_title(title)
         if items:
